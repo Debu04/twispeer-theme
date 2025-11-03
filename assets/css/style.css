@@ -7,3 +7,5 @@
 }
 body { margin:0; background:var(--bg); color:var(--text); font-family:Inter, Poppins, sans-serif; }
 a { color:var(--accent); text-decoration:none; }
+
+/* This is a test for changes */
