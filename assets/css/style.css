@@ -1,0 +1,9 @@
+:root {
+  --bg: #0F172A;
+  --card: #1E293B;
+  --text: #F8FAFC;
+  --muted: #94A3B8;
+  --accent: #6366F1;
+}
+body { margin:0; background:var(--bg); color:var(--text); font-family:Inter, Poppins, sans-serif; }
+a { color:var(--accent); text-decoration:none; }
