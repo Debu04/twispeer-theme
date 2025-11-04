@@ -94,3 +94,43 @@ function twispeer_rest_create_post( WP_REST_Request $request ) {
         'link'    => get_permalink( $post_obj ),
     ) );
 }
+
+
+/* ---------- Report endpoint: POST /wp-json/twispeer/v1/report ----------
+   Body JSON: { "post_id": 123 }
+   Response: { "success": true, "count": <new_count> }
+*/
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'twispeer/v1', '/report', array(
+        'methods'  => 'POST',
+        'callback' => 'twispeer_rest_report_post',
+        'permission_callback' => '__return_true', // public - adjust if needed
+        'args' => array(
+            'post_id' => array(
+                'required' => true,
+                'sanitize_callback' => 'absint',
+            ),
+        ),
+    ) );
+} );
+
+function twispeer_rest_report_post( WP_REST_Request $request ) {
+    $params = $request->get_json_params();
+    $post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
+    if ( ! $post_id || get_post_status( $post_id ) !== 'publish' ) {
+        return new WP_Error( 'invalid_post', 'Invalid post ID', array( 'status' => 400 ) );
+    }
+
+    // Increment numeric report count stored in post meta
+    $count = (int) get_post_meta( $post_id, 'twispeer_report_count', true );
+    $count++;
+    update_post_meta( $post_id, 'twispeer_report_count', $count );
+
+    // Optionally store a timestamp of last report (for moderation)
+    update_post_meta( $post_id, 'twispeer_report_last', current_time( 'mysql' ) );
+
+    return rest_ensure_response( array(
+        'success' => true,
+        'count'   => $count,
+    ) );
+}

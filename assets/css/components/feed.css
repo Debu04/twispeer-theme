@@ -1,5 +1,118 @@
-/* feed.css */
+/* assets/css/components/feed.css
+   Feed component styles: card header, three-dots menu (report), and share button
+*/
+
+/* Feed heading / list */
 .tp-feed-heading{ margin:6px 0 12px 0; font-size:18px; color:var(--text); }
 .tp-feed-items{ display:flex; flex-direction:column; gap:12px; }
-.tp-feed-item{ padding:14px; border-radius:12px; background:linear-gradient(180deg, rgba(255,255,255,0.007), rgba(0,0,0,0.06)); border:1px solid rgba(255,255,255,0.02); }
+
+/* Feed item card (base) */
+.tp-feed-item{
+  position: relative;
+  padding:14px;
+  border-radius:12px;
+  background:linear-gradient(180deg, rgba(255,255,255,0.007), rgba(0,0,0,0.06));
+  border:1px solid rgba(255,255,255,0.02);
+  overflow: visible; /* allow menu overflow */
+}
+
+/* Header row: title on left, menu on right */
+.tp-feed-item-header {
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  margin-bottom:8px;
+}
+
+/* Title (left) */
+.tp-feed-item-title {
+  font-weight:700;
+  color:var(--text);
+  font-size:1rem;
+  line-height:1.2;
+  margin:0;
+}
+
+/* Small meta under title */
 .tp-feed-item .meta{ color:var(--muted); font-size:13px; margin-bottom:8px; }
+
+/* Three-dots menu button */
+.tp-menu-button {
+  background: transparent;
+  border: none;
+  padding:6px 8px;
+  border-radius:8px;
+  color:var(--muted);
+  cursor:pointer;
+  font-size:18px;
+  line-height:1;
+}
+.tp-menu-button:hover { color:var(--text); background: rgba(255,255,255,0.01); }
+
+/* Floating menu panel (hidden by default) */
+.tp-menu-panel {
+  position: absolute;
+  top: 36px; /* below the menu button */
+  right: 14px;
+  min-width: 140px;
+  background: rgba(17,22,26,0.98);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.03);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+  display: none;
+  z-index: 40;
+  padding: 6px;
+}
+.tp-menu-panel.open { display:block; }
+
+/* Menu item */
+.tp-menu-item {
+  display:block;
+  width:100%;
+  padding:8px 10px;
+  color:var(--muted);
+  background: transparent;
+  border: none;
+  text-align:left;
+  cursor:pointer;
+  border-radius:8px;
+}
+.tp-menu-item:hover { background: rgba(255,255,255,0.01); color:var(--text); }
+
+/* Reaction / actions area at bottom */
+.tp-feed-item-actions {
+  margin-top:12px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+}
+
+/* Left side: reactions list (kept simple) */
+.tp-reactions { display:flex; gap:8px; align-items:center; }
+
+/* Right side: share button */
+.tp-share-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.03);
+  color: var(--muted);
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight:600;
+}
+.tp-share-btn:hover { background: rgba(255,255,255,0.01); color:var(--text); }
+
+/* Small helper text shown briefly after actions */
+.tp-action-notice {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-left: 8px;
+}
+
+/* small screens: keep layout readable */
+@media (max-width: 680px) {
+  .tp-menu-panel { right: 8px; top: 40px; }
+  .tp-share-btn { padding: 6px 8px; }
+}
