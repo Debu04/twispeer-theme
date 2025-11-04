@@ -1,60 +1,89 @@
 <?php
+/**
+ * Front page shell for Twispeer Theme
+ *
+ * Layout:
+ *  - left nav (vertical)
+ *  - center (composer + feed)
+ *  - right (trending / prompt / active)
+ */
 get_header();
 ?>
 
-<div id="twispeer-app" style="min-height:100vh; background:#0F172A; color:#F8FAFC; font-family:Inter, Poppins, sans-serif;">
-  <header style="position:sticky; top:0; z-index:40; background:rgba(15,23,42,0.9); backdrop-filter: blur(6px); border-bottom:1px solid rgba(255,255,255,0.03);">
-    <div style="max-width:1100px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:12px;">
-      <div style="font-weight:600; font-size:18px; color:#F8FAFC;">Twispeer</div>
-      <div style="flex:1; text-align:center; color:#94A3B8;">Where your thoughts whisper — and reactions speak.</div>
-      <div><a href="<?php echo wp_login_url(); ?>" style="color:#A855F7; text-decoration:none;">Log in</a></div>
-    </div>
-  </header>
+<main class="tp-main" role="main" aria-label="Main content area">
 
-  <main style="max-width:1100px; margin:20px auto; display:flex; gap:20px; padding:0 16px;">
-    <aside style="width:240px; display:none;" id="leftSidebar">
-      <nav style="background:#111827; border-radius:12px; padding:12px;">
-        <a style="display:block;color:#F8FAFC;padding:8px;border-radius:8px;text-decoration:none;" href="#">Feed</a>
-        <a style="display:block;color:#94A3B8;padding:8px;border-radius:8px;text-decoration:none;" href="#">Trending</a>
-        <a style="display:block;color:#94A3B8;padding:8px;border-radius:8px;text-decoration:none;" href="#">My Thoughts</a>
-      </nav>
-    </aside>
+  <!-- LEFT NAV -->
+  <nav class="tp-left" aria-label="Main navigation">
+    <ul class="tp-nav-list">
+      <li class="tp-nav-item active"><span class="tp-icon">🏠</span><span class="tp-nav-label">Feed</span></li>
+      <li class="tp-nav-item"><span class="tp-icon">🔥</span><span class="tp-nav-label">Trending</span></li>
+      <li class="tp-nav-item"><span class="tp-icon">💭</span><span class="tp-nav-label">My Thoughts</span></li>
+      <li class="tp-nav-item"><span class="tp-icon">＋</span><span class="tp-nav-label">New Post</span></li>
+      <li class="tp-nav-item"><span class="tp-icon">⚙️</span><span class="tp-nav-label">Settings</span></li>
+      <li class="tp-nav-item"><span class="tp-icon">⎋</span><span class="tp-nav-label">Logout</span></li>
+    </ul>
+  </nav>
 
-    <section style="flex:1;">
-      <div style="background:#1E293B; border-radius:12px; padding:12px; margin-bottom:16px;">
-        <textarea id="composer" maxlength="280" placeholder="What’s whispering in your mind?" style="width:100%; background:transparent; color:#F8FAFC; border:none; resize:none; min-height:60px; outline:none;"></textarea>
-        <div style="text-align:right; margin-top:8px;">
-          <button id="postBtn" style="background:#6366F1; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer;">Post</button>
+  <!-- CENTER: Composer + Feed -->
+  <section class="tp-center" aria-label="Feed and composer">
+
+    <!-- Composer card -->
+    <div class="tp-card tp-composer">
+      <textarea id="tp-content" class="tp-composer-input" placeholder="What's whispering in your mind?"></textarea>
+      <div class="tp-composer-actions">
+        <div class="tp-composer-meta">
+          <!-- small placeholder for attachments / emoji controls -->
+          <button class="tp-ghost" type="button" aria-hidden="true">😊</button>
+          <button class="tp-ghost" type="button" aria-hidden="true">＋</button>
+        </div>
+        <div>
+          <button id="tp-submit" class="tp-btn">Post</button>
         </div>
       </div>
-      <div id="postsContainer"></div>
-    </section>
+    </div>
 
-    <aside style="width:300px; display:none;" id="rightSidebar">
-      <div style="background:#111827; border-radius:12px; padding:12px;">
-        <h4 style="margin:0 0 8px 0; color:#F8FAFC;">Trending</h4>
-        <div id="trendingList" style="color:#94A3B8;">Loading...</div>
+    <!-- Feed list (items rendered by JS via REST) -->
+    <div id="feed" class="tp-feed">
+      <!-- feed header -->
+      <h2 class="tp-feed-heading">Feed</h2>
+      <div id="feed-items" class="tp-feed-items">
+        <!-- JS will inject feed items here -->
+        <div class="tp-empty">Loading…</div>
       </div>
-    </aside>
-  </main>
-</div>
+    </div>
 
-<style>
-@media(min-width: 900px) {
-  #leftSidebar { display:block; }
-  #rightSidebar { display:block; }
-}
-@media(max-width: 899px) {
-  header div { font-size:14px; }
-  main { padding-bottom:72px; }
-  #leftSidebar, #rightSidebar { display:none; }
-}
-.post-card { background:#111827; border-radius:12px; padding:12px; margin-bottom:12px; border:1px solid rgba(255,255,255,0.02); }
-.post-meta { color:#94A3B8; font-size:13px; margin-bottom:8px; }
-.reaction-bar { display:flex; gap:8px; margin-top:10px; align-items:center; }
-.reaction-btn { background:transparent; border:1px solid rgba(255,255,255,0.04); padding:6px 8px; border-radius:8px; cursor:pointer; color:#F8FAFC; }
-</style>
+  </section>
+
+  <!-- RIGHT SIDEBAR -->
+  <aside class="tp-right" aria-label="Right sidebar">
+
+    <div class="tp-card tp-right-block">
+      <h3 class="tp-right-title">Trending</h3>
+      <div class="tp-trending">
+        <!-- sample items (will be replaced by live data) -->
+        <div class="tp-trend-item"><div class="tp-trend-text">How to stay focused</div><div class="tp-trend-count">😄 120</div></div>
+        <div class="tp-trend-item"><div class="tp-trend-text">Morning routines</div><div class="tp-trend-count">🙂 15</div></div>
+      </div>
+    </div>
+
+    <div class="tp-card tp-right-block">
+      <h3 class="tp-right-title">Today's Prompt</h3>
+      <div class="tp-prompt">Describe your current mood in one word.</div>
+    </div>
+
+    <div class="tp-card tp-right-block">
+      <h3 class="tp-right-title">Recently Active</h3>
+      <div class="tp-active">
+        <div class="tp-avatar-mini"></div>
+        <div class="tp-avatar-mini"></div>
+        <div class="tp-avatar-mini"></div>
+        <div class="tp-avatar-mini"></div>
+      </div>
+    </div>
+
+  </aside>
+
+</main>
 
 <?php
 get_footer();
-?>

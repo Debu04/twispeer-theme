@@ -1,0 +1,33 @@
+/* Small override loaded after main styles to ensure theme visuals win over WP defaults */
+
+html, body {
+  background: #0b0f13 !important;
+  color: #e6eef6 !important;
+}
+
+/* stronger header rules */
+body .tp-header {
+  border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+  padding-bottom: 8px !important;
+}
+
+/* title */
+body .tp-brand .tp-title,
+body .tp-brand .tp-title a {
+  color: #e6eef6 !important;
+  background: transparent !important;
+  text-decoration: none !important;
+}
+
+/* composer button */
+body .tp-controls button,
+body .tp-controls button:focus {
+  background: #6cf !important;
+  color: #001 !important;
+  border: none !important;
+}
+
+/* ensure basic feed item spacing */
+body .feed-item {
+  padding: 12px !important;
+}

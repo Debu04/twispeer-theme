@@ -1,31 +1,96 @@
 <?php
-add_action('rest_api_init', function () {
-  register_rest_route('twispeer/v1', '/feed', array(
-    'methods' => 'GET',
-    'callback' => 'twispeer_get_feed',
-  ));
-  register_rest_route('twispeer/v1', '/post', array(
-    'methods' => 'POST',
-    'callback' => 'twispeer_create_post',
-    'permission_callback' => function () { return is_user_logged_in(); }
-  ));
-});
+/**
+ * Demo REST endpoints for Twispeer theme
+ * Routes:
+ *  GET  /wp-json/twispeer/v1/feed  -> returns a simple feed (latest posts)
+ *  POST /wp-json/twispeer/v1/post  -> create a new post (requires edit_posts capability)
+ */
 
-function twispeer_get_feed($request) {
-  $items = array(
-    array('id'=>1,'text'=>'I love rainy mornings.','time'=>'2h','reactions'=>array('❤️'=>4,'😂'=>1)),
-    array('id'=>2,'text'=>'Coffee first, questions later.','time'=>'3h','reactions'=>array('☕'=>6)),
-    array('id'=>3,'text'=>'Sometimes silence is an answer.','time'=>'1d','reactions'=>array('🤫'=>3)),
-  );
-  return rest_ensure_response($items);
+add_action( 'rest_api_init', function () {
+    register_rest_route( 'twispeer/v1', '/feed', array(
+        'methods'  => 'GET',
+        'callback' => 'twispeer_rest_get_feed',
+        'permission_callback' => '__return_true', // public read
+    ) );
+
+    register_rest_route( 'twispeer/v1', '/post', array(
+        'methods'  => 'POST',
+        'callback' => 'twispeer_rest_create_post',
+        'permission_callback' => function () {
+            return current_user_can( 'edit_posts' );
+        },
+        'args' => array(
+            'content' => array(
+                'required' => true,
+                'sanitize_callback' => 'wp_kses_post',
+            ),
+            'title' => array(
+                'required' => false,
+                'sanitize_callback' => 'sanitize_text_field',
+            )
+        ),
+    ) );
+} );
+
+function twispeer_rest_get_feed( $request ) {
+    $args = array(
+        'post_type'      => 'post',
+        'post_status'    => 'publish',
+        'posts_per_page' => 10,
+        'orderby'        => 'date',
+        'order'          => 'DESC',
+    );
+    $q = new WP_Query( $args );
+
+    $items = array();
+
+    if ( $q->have_posts() ) {
+        while ( $q->have_posts() ) {
+            $q->the_post();
+            $items[] = array(
+                'id'      => get_the_ID(),
+                'title'   => get_the_title(),
+                'content' => apply_filters( 'the_excerpt', get_the_excerpt() ?: wp_trim_words( get_the_content(), 30 ) ),
+                'author'  => get_the_author_meta( 'display_name', get_post_field( 'post_author', get_the_ID() ) ),
+                'date'    => get_the_date( 'c' ),
+                'link'    => get_permalink(),
+            );
+        }
+        wp_reset_postdata();
+    }
+
+    return rest_ensure_response( $items );
 }
 
-function twispeer_create_post($request) {
-  $params = $request->get_json_params();
-  $text = sanitize_text_field($params['text'] ?? '');
-  if (empty($text)) {
-    return new WP_Error('empty_text', 'Text is required', array('status'=>400));
-  }
-  $new = array('id'=>rand(100,999),'text'=>$text,'time'=>'just now','reactions'=>array());
-  return rest_ensure_response($new);
+function twispeer_rest_create_post( WP_REST_Request $request ) {
+    $params = $request->get_json_params();
+
+    $content = isset( $params['content'] ) ? wp_kses_post( $params['content'] ) : '';
+    $title   = isset( $params['title'] ) ? sanitize_text_field( $params['title'] ) : wp_trim_words( $content, 6, '...' );
+
+    if ( empty( $content ) ) {
+        return new WP_Error( 'empty_content', 'Content is required', array( 'status' => 400 ) );
+    }
+
+    $post_id = wp_insert_post( array(
+        'post_title'   => $title,
+        'post_content' => $content,
+        'post_status'  => 'publish',
+        'post_author'  => get_current_user_id(),
+        'post_type'    => 'post',
+    ), true );
+
+    if ( is_wp_error( $post_id ) ) {
+        return $post_id;
+    }
+
+    $post_obj = get_post( $post_id );
+
+    return rest_ensure_response( array(
+        'id'      => $post_obj->ID,
+        'title'   => get_the_title( $post_obj ),
+        'content' => apply_filters( 'the_content', $post_obj->post_content ),
+        'date'    => get_post_time( 'c', true, $post_obj ),
+        'link'    => get_permalink( $post_obj ),
+    ) );
 }

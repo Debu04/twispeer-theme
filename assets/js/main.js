@@ -1,59 +1,93 @@
-document.addEventListener('DOMContentLoaded', function(){
-  const postsContainer = document.getElementById('postsContainer');
-  const trendingList = document.getElementById('trendingList');
+/**
+ * Front-end JS: fetch feed and post
+ * - uses TWISPEER.rest_url and TWISPEER.nonce localized in functions.php
+ */
 
-  function renderPost(item){
-    const div = document.createElement('div');
-    div.className = 'post-card';
-    div.innerHTML = `
-      <div class="post-meta">Anonymous • ${item.time}</div>
-      <div class="post-text">${item.text}</div>
-      <div class="reaction-bar">
-        ${Object.keys(item.reactions||{}).map(e => `<button class="reaction-btn">${e} ${item.reactions[e]}</button>`).join('')}
-        <button class="reaction-btn">+ Add</button>
-      </div>
-    `;
-    postsContainer.appendChild(div);
+/* Immediately invoked block */
+(function(){
+  if ( typeof TWISPEER === 'undefined' ) {
+    console.warn('TWISPEER config missing');
+    return;
   }
 
-  fetch(twispeer_vars.rest_url + 'feed', {
-    headers: { 'X-WP-Nonce': twispeer_vars.nonce }
-  })
-  .then(r=>r.json())
-  .then(data=>{
-    postsContainer.innerHTML = '';
-    data.forEach(renderPost);
-    trendingList.innerHTML = data.slice(0,3).map(i => `<div style="padding:6px 0;">${i.text} <div style="color:#94A3B8;font-size:12px;">${i.time}</div></div>`).join('');
-  })
-  .catch(e => { postsContainer.innerHTML = '<div style="color:#94A3B8">Failed to load feed</div>'; });
+  const base = TWISPEER.rest_url.replace(/\/$/, '') + '/';
+  const feedItems = document.getElementById('feed-items');
+  const formBtn = document.getElementById('tp-submit');
+  const contentInput = document.getElementById('tp-content');
+  const messageEl = document.getElementById('tp-message');
 
-  const postBtn = document.getElementById('postBtn');
-  const composer = document.getElementById('composer');
-  postBtn.addEventListener('click', function(){
-    const text = composer.value.trim();
-    if (!text) return alert('Write something first');
-    fetch(twispeer_vars.rest_url + 'post', {
-      method: 'POST',
-      headers: {
-        'Content-Type':'application/json',
-        'X-WP-Nonce': twispeer_vars.nonce
-      },
-      body: JSON.stringify({text})
-    })
-    .then(r => {
-      if (!r.ok) throw r;
-      return r.json();
-    })
-    .then(item => {
-      const div = document.createElement('div');
-      div.className = 'post-card';
-      div.innerHTML = `<div class="post-meta">You • ${item.time}</div><div class="post-text">${item.text}</div><div class="reaction-bar"><button class="reaction-btn">+ Add</button></div>`;
-      postsContainer.insertBefore(div, postsContainer.firstChild);
-      composer.value = '';
-    })
-    .catch(async err => {
-      const msg = (await err.json().catch(()=>({message:'Error'}))).message || 'Post failed';
-      alert(msg);
+  async function fetchFeed(){
+    feedItems.innerHTML = '<div class="tp-empty">Loading…</div>';
+    try {
+      const res = await fetch(base + 'feed');
+      if (!res.ok) throw new Error('Failed to load feed');
+      const items = await res.json();
+      renderFeed(items);
+    } catch (err) {
+      console.error(err);
+      feedItems.innerHTML = '<div class="tp-empty">Unable to load feed</div>';
+    }
+  }
+
+  function renderFeed(items){
+    if (!items || items.length === 0) {
+      feedItems.innerHTML = '<div class="tp-empty">No posts yet.</div>';
+      return;
+    }
+    feedItems.innerHTML = items.map(i => {
+      return `<div class="tp-feed-item">
+                <div class="meta"><strong>${escapeHtml(i.author||'Unknown')}</strong> — ${new Date(i.date).toLocaleString()}</div>
+                <div class="content">${i.content}</div>
+                <div class="tp-reactions">
+                  <div class="tp-reaction">❤️ 0</div>
+                  <div class="tp-reaction">😊 0</div>
+                </div>
+              </div>`;
+    }).join('');
+  }
+
+  function escapeHtml(str){
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, function (m) {
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]);
     });
-  });
-});
+  }
+
+  async function createPost(){
+    const content = (contentInput.value || '').trim();
+    if (!content) {
+      messageEl.textContent = 'Write something first.';
+      return;
+    }
+    messageEl.textContent = 'Posting…';
+    try {
+      const res = await fetch(base + 'post', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-WP-Nonce': TWISPEER.nonce
+        },
+        body: JSON.stringify({ content }),
+        credentials: 'same-origin'
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        messageEl.textContent = body.message || 'Failed to post';
+        return;
+      }
+      messageEl.textContent = 'Posted!';
+      contentInput.value = '';
+      fetchFeed(); // refresh feed
+    } catch (err) {
+      console.error(err);
+      messageEl.textContent = 'Network error';
+    } finally {
+      setTimeout(()=>{ messageEl.textContent = ''; }, 2500);
+    }
+  }
+
+  if (formBtn) formBtn.addEventListener('click', createPost);
+
+  // load feed on start
+  fetchFeed();
+})();
