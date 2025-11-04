@@ -77,10 +77,12 @@ function twispeer_enqueue_assets() {
     }
 
     // localize for JS
-    wp_localize_script( 'twispeer-main', 'TWISPEER', array(
+        wp_localize_script( 'twispeer-main', 'TWISPEER', array(
         'rest_url' => esc_url_raw( rest_url( 'twispeer/v1' ) ),
         'nonce'    => wp_create_nonce( 'wp_rest' ),
+        'current_user' => get_current_user_id(),
     ) );
+
 }
 add_action( 'wp_enqueue_scripts', 'twispeer_enqueue_assets' );
 

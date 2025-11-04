@@ -1,118 +1,99 @@
 /* assets/css/components/feed.css
-   Feed component styles: card header, three-dots menu (report), and share button
+   Updated: keeps default five emojis inline with plus button,
+   shows top two custom emojis (separately), and a Share modal style.
 */
 
-/* Feed heading / list */
+/* feed list & card (modern elevated card) */
 .tp-feed-heading{ margin:6px 0 12px 0; font-size:18px; color:var(--text); }
-.tp-feed-items{ display:flex; flex-direction:column; gap:12px; }
+.tp-feed-items{ display:flex; flex-direction:column; gap:14px; }
 
-/* Feed item card (base) */
 .tp-feed-item{
   position: relative;
   padding:14px;
-  border-radius:12px;
-  background:linear-gradient(180deg, rgba(255,255,255,0.007), rgba(0,0,0,0.06));
-  border:1px solid rgba(255,255,255,0.02);
-  overflow: visible; /* allow menu overflow */
-}
-
-/* Header row: title on left, menu on right */
-.tp-feed-item-header {
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  gap:12px;
-  margin-bottom:8px;
-}
-
-/* Title (left) */
-.tp-feed-item-title {
-  font-weight:700;
-  color:var(--text);
-  font-size:1rem;
-  line-height:1.2;
-  margin:0;
-}
-
-/* Small meta under title */
-.tp-feed-item .meta{ color:var(--muted); font-size:13px; margin-bottom:8px; }
-
-/* Three-dots menu button */
-.tp-menu-button {
-  background: transparent;
-  border: none;
-  padding:6px 8px;
-  border-radius:8px;
-  color:var(--muted);
-  cursor:pointer;
-  font-size:18px;
-  line-height:1;
-}
-.tp-menu-button:hover { color:var(--text); background: rgba(255,255,255,0.01); }
-
-/* Floating menu panel (hidden by default) */
-.tp-menu-panel {
-  position: absolute;
-  top: 36px; /* below the menu button */
-  right: 14px;
-  min-width: 140px;
-  background: rgba(17,22,26,0.98);
-  border-radius: 10px;
+  border-radius:14px;
+  background: linear-gradient(180deg, rgba(20,26,31,0.85), rgba(8,11,13,0.85));
   border: 1px solid rgba(255,255,255,0.03);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.5);
-  display: none;
-  z-index: 40;
-  padding: 6px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.45);
+  overflow: visible;
 }
-.tp-menu-panel.open { display:block; }
 
-/* Menu item */
-.tp-menu-item {
-  display:block;
-  width:100%;
-  padding:8px 10px;
-  color:var(--muted);
-  background: transparent;
-  border: none;
-  text-align:left;
-  cursor:pointer;
-  border-radius:8px;
-}
+/* header & profile */
+.tp-feed-item-header { display:flex; justify-content:space-between; gap:12px; margin-bottom:8px; align-items:flex-start; }
+.tp-profile { display:flex; gap:10px; align-items:center; }
+.tp-avatar-sm { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.04)); color:var(--text); font-weight:700; border:1px solid rgba(255,255,255,0.03); flex:0 0 36px; }
+.tp-profile-meta { display:flex; flex-direction:column; gap:2px; }
+.tp-profile-name { font-weight:700; color:var(--text); font-size:0.98rem; line-height:1; }
+.tp-profile-time { font-size:12px; color:var(--muted); }
+
+/* menu */
+.tp-menu-button { background: transparent; border: none; padding:6px 8px; border-radius:8px; color:var(--muted); cursor:pointer; font-size:18px; line-height:1; }
+.tp-menu-button:hover { color:var(--text); background: rgba(255,255,255,0.01); }
+.tp-menu-panel { position:absolute; top:46px; right:14px; min-width:150px; background: rgba(16,20,24,0.98); border-radius:10px; border:1px solid rgba(255,255,255,0.03); box-shadow: 0 6px 18px rgba(0,0,0,0.5); display:none; z-index:40; padding:6px; }
+.tp-menu-panel.open{ display:block; }
+.tp-menu-item { display:block; width:100%; padding:9px 10px; color:var(--muted); background:transparent; border:none; text-align:left; cursor:pointer; border-radius:8px; }
 .tp-menu-item:hover { background: rgba(255,255,255,0.01); color:var(--text); }
 
-/* Reaction / actions area at bottom */
-.tp-feed-item-actions {
-  margin-top:12px;
+/* content */
+.tp-feed-item .content { color:var(--text); line-height:1.6; white-space:pre-wrap; margin-bottom:8px; }
+
+/* reactions row: default emojis + plus inline */
+.tp-reactions-row { display:flex; justify-content:space-between; align-items:center; margin-top:12px; gap:8px; }
+.tp-reactions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.tp-reaction-btn { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px; background: rgba(255,255,255,0.02); color:var(--muted); cursor:pointer; font-weight:600; border:1px solid rgba(255,255,255,0.02); transition: transform .08s, color .08s; }
+.tp-reaction-btn:hover { transform: translateY(-2px); color:var(--text); background: rgba(255,255,255,0.03); }
+.tp-reaction-btn.active { background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(0,0,0,0.04)); color:var(--text); box-shadow: 0 6px 12px rgba(0,0,0,0.45) inset; }
+.tp-reaction-emoji { font-size:16px; }
+.tp-reaction-count { font-size:13px; color:var(--muted); }
+
+/* plus button inline */
+.tp-add-emoji { display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:50%; background: rgba(255,255,255,0.01); border:1px solid rgba(255,255,255,0.02); cursor:pointer; color:var(--muted); font-weight:700; }
+
+/* two-top-custom wrapper (small row under default emojis) */
+.tp-custom-top{
+  margin-top:10px;
   display:flex;
-  justify-content:space-between;
   align-items:center;
   gap:8px;
 }
+.tp-custom-total{ font-size:13px; color:var(--muted); margin-left:8px; }
 
-/* Left side: reactions list (kept simple) */
-.tp-reactions { display:flex; gap:8px; align-items:center; }
+/* actions */
+.tp-actions { display:flex; gap:10px; align-items:center; }
+.tp-action-btn { display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:10px; background: transparent; color:var(--muted); border:1px solid rgba(255,255,255,0.03); cursor:pointer; font-weight:600; }
+.tp-action-btn:hover { background: rgba(255,255,255,0.01); color:var(--text); }
+.tp-action-notice { font-size:0.9rem; color:var(--muted); margin-left:8px; display:inline-block; }
 
-/* Right side: share button */
-.tp-share-btn {
-  background: transparent;
-  border: 1px solid rgba(255,255,255,0.03);
-  color: var(--muted);
-  padding: 8px 10px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-weight:600;
+/* ---------- Share modal styles ---------- */
+.tp-share-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  background: rgba(0,0,0,0.45);
 }
-.tp-share-btn:hover { background: rgba(255,255,255,0.01); color:var(--text); }
-
-/* Small helper text shown briefly after actions */
-.tp-action-notice {
-  font-size: 0.9rem;
-  color: var(--muted);
-  margin-left: 8px;
+.tp-share-modal.open { display:flex; }
+.tp-share-modal-inner {
+  width: 360px;
+  max-width: calc(100% - 40px);
+  background: linear-gradient(180deg, rgba(18,22,26,0.98), rgba(8,10,12,0.98));
+  border-radius: 14px;
+  padding: 18px;
+  border: 1px solid rgba(255,255,255,0.04);
+  box-shadow: 0 18px 48px rgba(0,0,0,0.7);
+  color: var(--text);
 }
+.tp-share-modal-close { position:absolute; right:18px; top:18px; background:transparent; border:none; color:var(--muted); font-size:18px; cursor:pointer; }
+.tp-share-options { display:flex; flex-direction:column; gap:10px; margin-top:8px; }
+.tp-share-options .tp-action-btn { width:100%; justify-content:center; }
+.share-link-input { width:100%; padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); background: rgba(255,255,255,0.02); color:var(--text); }
 
-/* small screens: keep layout readable */
-@media (max-width: 680px) {
-  .tp-menu-panel { right: 8px; top: 40px; }
-  .tp-share-btn { padding: 6px 8px; }
+/* modal notice */
+.tp-share-modal-notice { color:var(--muted); font-size:0.95rem; margin-top:6px; }
+
+/* small screens adjustments */
+@media (max-width:900px) {
+  .tp-custom-top { flex-wrap:wrap; }
+  .tp-share-modal-inner { width: 92%; }
 }

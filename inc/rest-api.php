@@ -134,3 +134,175 @@ function twispeer_rest_report_post( WP_REST_Request $request ) {
         'count'   => $count,
     ) );
 }
+
+
+
+/* ---------- Reactions API (per-post, per-user single reaction) ----------
+   Adds persistent reaction counts and per-user reaction record.
+   - GET  /wp-json/twispeer/v1/reactions?post_id=123
+   - POST /wp-json/twispeer/v1/reactions  { post_id, emoji }  (must be logged in)
+   Data stored in post meta:
+     - twispeer_reactions => associative array emoji => count
+     - twispeer_reactors  => associative array user_id => emoji
+---------------------------------------------------------------------------*/
+
+add_action( 'rest_api_init', function () {
+    // GET aggregated reactions for a post
+    register_rest_route( 'twispeer/v1', '/reactions', array(
+        'methods'  => 'GET',
+        'callback' => 'twispeer_rest_get_reactions',
+        'permission_callback' => '__return_true',
+        'args' => array(
+            'post_id' => array(
+                'required' => true,
+                'sanitize_callback' => 'absint',
+            ),
+        ),
+    ) );
+
+    // POST set user reaction (requires login)
+    register_rest_route( 'twispeer/v1', '/reactions', array(
+        'methods'  => 'POST',
+        'callback' => 'twispeer_rest_set_reaction',
+        'permission_callback' => function () {
+            return is_user_logged_in();
+        },
+        'args' => array(
+            'post_id' => array(
+                'required' => true,
+                'sanitize_callback' => 'absint',
+            ),
+            'emoji' => array(
+                'required' => true,
+                'sanitize_callback' => 'sanitize_text_field',
+            ),
+        ),
+    ) );
+} );
+
+/**
+ * Helper: load reaction arrays from postmeta (returns arrays)
+ */
+function twispeer_load_reaction_meta( $post_id ) {
+    $reactions = get_post_meta( $post_id, 'twispeer_reactions', true );
+    $reactors  = get_post_meta( $post_id, 'twispeer_reactors', true );
+
+    if ( ! is_array( $reactions ) ) $reactions = array();
+    if ( ! is_array( $reactors ) ) $reactors = array();
+
+    return array( 'reactions' => $reactions, 'reactors' => $reactors );
+}
+
+/**
+ * Helper: write reaction arrays back to postmeta
+ */
+function twispeer_save_reaction_meta( $post_id, $reactions, $reactors ) {
+    update_post_meta( $post_id, 'twispeer_reactions', $reactions );
+    update_post_meta( $post_id, 'twispeer_reactors', $reactors );
+}
+
+/**
+ * Build aggregated response shape
+ */
+function twispeer_build_reactions_response( $post_id ) {
+    $meta = twispeer_load_reaction_meta( $post_id );
+    $reactions = $meta['reactions']; // emoji => count
+    $reactors  = $meta['reactors'];  // user_id => emoji
+
+    // compute total
+    $total = 0;
+    foreach ( $reactions as $cnt ) {
+        $total += intval( $cnt );
+    }
+
+    // compute top two emojis (by count)
+    arsort( $reactions ); // descending numeric
+    $top = array_slice( $reactions, 0, 2, true ); // emoji => count
+
+    // find current user reaction (if logged in)
+    $current_user_id = get_current_user_id();
+    $user_reaction = isset( $reactors[ $current_user_id ] ) ? $reactors[ $current_user_id ] : null;
+
+    return array(
+        'post_id' => $post_id,
+        'reactions' => $reactions,
+        'top' => $top,
+        'total' => $total,
+        'user_reaction' => $user_reaction,
+    );
+}
+
+/**
+ * GET handler: return aggregated reactions
+ */
+function twispeer_rest_get_reactions( WP_REST_Request $request ) {
+    $post_id = (int) $request->get_param( 'post_id' );
+    if ( ! $post_id || get_post_status( $post_id ) !== 'publish' ) {
+        return new WP_Error( 'invalid_post', 'Invalid post ID', array( 'status' => 400 ) );
+    }
+    return rest_ensure_response( twispeer_build_reactions_response( $post_id ) );
+}
+
+/**
+ * POST handler: set a user's reaction (single reaction per user)
+ * Body: { post_id: <int>, emoji: "<emoji char or string>" }
+ */
+function twispeer_rest_set_reaction( WP_REST_Request $request ) {
+    $params = $request->get_json_params();
+    $post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
+    $emoji   = isset( $params['emoji'] ) ? trim( wp_strip_all_tags( $params['emoji'] ) ) : '';
+
+    if ( ! $post_id || get_post_status( $post_id ) !== 'publish' ) {
+        return new WP_Error( 'invalid_post', 'Invalid post ID', array( 'status' => 400 ) );
+    }
+    if ( empty( $emoji ) ) {
+        return new WP_Error( 'invalid_emoji', 'Emoji is required', array( 'status' => 400 ) );
+    }
+
+    $user_id = get_current_user_id();
+    if ( ! $user_id ) {
+        return new WP_Error( 'not_logged_in', 'You must be logged in to react', array( 'status' => 401 ) );
+    }
+
+    // load stored meta
+    $meta = twispeer_load_reaction_meta( $post_id );
+    $reactions = $meta['reactions'];
+    $reactors  = $meta['reactors'];
+
+    // ensure arrays are correct types
+    if ( ! is_array( $reactions ) ) $reactions = array();
+    if ( ! is_array( $reactors ) ) $reactors = array();
+
+    // if user had a previous reaction, decrement its count
+    if ( isset( $reactors[ $user_id ] ) && $reactors[ $user_id ] !== $emoji ) {
+        $prev = $reactors[ $user_id ];
+        if ( isset( $reactions[ $prev ] ) ) {
+            $reactions[ $prev ] = max( 0, intval( $reactions[ $prev ] ) - 1 );
+            if ( $reactions[ $prev ] <= 0 ) unset( $reactions[ $prev ] );
+        }
+    }
+
+    // if user clicked the same emoji again we interpret as "remove reaction" (toggle)
+    if ( isset( $reactors[ $user_id ] ) && $reactors[ $user_id ] === $emoji ) {
+        // remove mapping and decrement count
+        unset( $reactors[ $user_id ] );
+        if ( isset( $reactions[ $emoji ] ) ) {
+            $reactions[ $emoji ] = max( 0, intval( $reactions[ $emoji ] ) - 1 );
+            if ( $reactions[ $emoji ] <= 0 ) unset( $reactions[ $emoji ] );
+        }
+    } else {
+        // set new reaction for user and increment count
+        $reactors[ $user_id ] = $emoji;
+        if ( isset( $reactions[ $emoji ] ) ) {
+            $reactions[ $emoji ] = intval( $reactions[ $emoji ] ) + 1;
+        } else {
+            $reactions[ $emoji ] = 1;
+        }
+    }
+
+    // save back
+    twispeer_save_reaction_meta( $post_id, $reactions, $reactors );
+
+    // return updated aggregated response
+    return rest_ensure_response( twispeer_build_reactions_response( $post_id ) );
+}
