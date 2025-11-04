@@ -1,0 +1,5 @@
+/* feed.css */
+.tp-feed-heading{ margin:6px 0 12px 0; font-size:18px; color:var(--text); }
+.tp-feed-items{ display:flex; flex-direction:column; gap:12px; }
+.tp-feed-item{ padding:14px; border-radius:12px; background:linear-gradient(180deg, rgba(255,255,255,0.007), rgba(0,0,0,0.06)); border:1px solid rgba(255,255,255,0.02); }
+.tp-feed-item .meta{ color:var(--muted); font-size:13px; margin-bottom:8px; }

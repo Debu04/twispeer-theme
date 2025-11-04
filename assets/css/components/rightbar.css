@@ -1,0 +1,4 @@
+/* rightbar.css */
+.tp-right-block{ padding:12px; border-radius:12px; background: transparent; }
+.tp-right-title{ margin:0 0 8px 0; color:var(--text); font-size:14px; }
+.tp-prompt{ background:rgba(255,255,255,0.02); padding:12px; border-radius:10px; color:var(--text); }

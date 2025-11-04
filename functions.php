@@ -42,31 +42,48 @@ function twispeer_setup() {
 }
 add_action( 'after_setup_theme', 'twispeer_setup' );
 
-/* Enqueue assets (robust) */
+/* Enqueue assets (automatically loads all component CSS/JS) */
 function twispeer_enqueue_assets() {
-    // Versioning
     $ver = defined('TWISPEER_VERSION') ? TWISPEER_VERSION : '1.0.2';
 
-    // Theme root style (style.css)
+    // root and main
     wp_enqueue_style( 'twispeer-root-style', get_stylesheet_uri(), array(), $ver );
-
-    // Main assets stylesheet
     $theme_uri = defined( 'TWISPEER_THEME_URI' ) ? TWISPEER_THEME_URI : get_template_directory_uri();
+    $theme_dir = defined( 'TWISPEER_THEME_DIR' ) ? TWISPEER_THEME_DIR : get_template_directory();
+
     wp_enqueue_style( 'twispeer-main', $theme_uri . '/assets/css/style.css', array('twispeer-root-style'), $ver );
 
-    // Override stylesheet loaded after main (small targeted overrides)
-    wp_enqueue_style( 'twispeer-override', $theme_uri . '/assets/css/override.css', array('twispeer-main'), $ver );
+    // load ALL component CSS files in assets/css/components/*.css
+    $component_css_dir = $theme_dir . '/assets/css/components';
+    if ( is_dir( $component_css_dir ) ) {
+        foreach ( glob( $component_css_dir . '/*.css' ) as $file ) {
+            $handle = 'twispeer-' . basename( $file, '.css' );
+            $uri = str_replace( $theme_dir, $theme_uri, $file );
+            wp_enqueue_style( $handle, $uri, array('twispeer-main'), $ver );
+        }
+    }
 
-    // Main JS
+    // main script (bootstrap)
     wp_enqueue_script( 'twispeer-main', $theme_uri . '/assets/js/main.js', array('jquery'), $ver, true );
 
-    // Localize REST base + nonce for JS
+    // load component JS files in assets/js/components/*.js (in footer)
+    $component_js_dir = $theme_dir . '/assets/js/components';
+    if ( is_dir( $component_js_dir ) ) {
+        foreach ( glob( $component_js_dir . '/*.js' ) as $file ) {
+            $handle = 'twispeer-' . basename( $file, '.js' );
+            $uri = str_replace( $theme_dir, $theme_uri, $file );
+            wp_enqueue_script( $handle, $uri, array('twispeer-main'), $ver, true );
+        }
+    }
+
+    // localize for JS
     wp_localize_script( 'twispeer-main', 'TWISPEER', array(
         'rest_url' => esc_url_raw( rest_url( 'twispeer/v1' ) ),
         'nonce'    => wp_create_nonce( 'wp_rest' ),
     ) );
 }
 add_action( 'wp_enqueue_scripts', 'twispeer_enqueue_assets' );
+
 
 /* -------------------------
  * Admin helper: create a sample post via admin-post

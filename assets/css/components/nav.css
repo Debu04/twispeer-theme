@@ -1,0 +1,5 @@
+/* nav.css - only nav specific rules (keeps main style.css smaller) */
+.tp-nav-list{ list-style:none; margin:0; padding:12px; border-radius:12px; background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.03)); border: 1px solid rgba(255,255,255,0.02); }
+.tp-nav-item{ display:flex; gap:12px; padding:12px 10px; margin-bottom:10px; color:var(--muted); border-radius:10px; cursor:pointer; }
+.tp-nav-item:hover{ background: rgba(255,255,255,0.01); color:var(--text); transform: translateY(-1px); }
+.tp-nav-item.active{ background: rgba(255,255,255,0.02); color:var(--text); font-weight:600; }
