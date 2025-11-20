@@ -27,7 +27,8 @@
 
 
 
-/* Smooth SPA-style crossfade for feed content */
+/* assets/css/components/trending.css */
+/* Smooth swap for feed/trending */
 #feed-items {
   opacity: 1;
   transform: translateY(0);
@@ -35,14 +36,14 @@
   will-change: opacity, transform;
 }
 
-/* small visible states */
-.tp-loading, .tp-empty, .tp-error, .tp-post {
-  transition: opacity 180ms ease, transform 180ms ease;
-}
+/* Feed heading */
+.tp-feed-heading { transition: color 160ms ease; }
 
-/* active nav */
-.tp-nav-item.active { font-weight: 700; color: var(--primary); }
+/* Active nav item */
+.tp-nav-item.active { font-weight:700; color: var(--primary, #0a84ff); }
 
-/* optionally reduce layout shift while content changes */
-.tp-post { backface-visibility: hidden; }
+/* small custom reactions area */
+.tp-custom-top { margin-top:8px; display:flex; gap:8px; align-items:center; }
+.tp-custom-total { font-size:12px; opacity:0.8; padding-left:6px; }
+
 

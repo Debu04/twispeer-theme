@@ -307,239 +307,93 @@ function twispeer_rest_set_reaction( WP_REST_Request $request ) {
     return rest_ensure_response( twispeer_build_reactions_response( $post_id ) );
 }
 
+/*--------------------------------------------------------------
+    TRENDING ENDPOINT
+    GET /wp-json/twispeer/v1/trending
+--------------------------------------------------------------*/
 
-
-
-
-
-// --- TWISPEER: trends by reactions (append to end of inc/rest-api.php) ---
 add_action( 'rest_api_init', function () {
-  register_rest_route( 'twispeer/v1', '/trends', array(
-    'methods'  => WP_REST_Server::READABLE,
-    'callback' => 'twispeer_rest_get_trends_by_reactions',
-    'permission_callback' => '__return_true',
-  ) );
+    register_rest_route( 'twispeer/v1', '/trending', array(
+        'methods'  => 'GET',
+        'callback' => 'twispeer_rest_get_trending_posts',
+        'permission_callback' => '__return_true',
+    ) );
 } );
 
 /**
- * Return trending posts ranked by reaction counts.
- *
- * The function tries two common storage patterns:
- *  1) postmeta entry that stores an aggregated count per post (meta_key: twispeer_reactions_count)
- *  2) a custom table (wp_twispeer_reactions) where each row is a reaction with post_id
- *
- * The endpoint returns an array of objects:
- *  [ { id: 123, score: 456 }, ... ]
- *
- * Edit $limit, $meta_key, or the custom table name if your schema differs.
+ * Trending Logic:
+ * 1. Load ALL posts (limit ~100 for safety)
+ * 2. Compute total reactions per post
+ * 3. Remove posts with zero reactions
+ * 4. Sort:
+ *      - First by total reactions (DESC)
+ *      - If equal, by post date (DESC)
  */
-if ( ! function_exists( 'twispeer_rest_get_trends_by_reactions' ) ) {
-  function twispeer_rest_get_trends_by_reactions( WP_REST_Request $request ) {
-    global $wpdb;
+function twispeer_rest_get_trending_posts( WP_REST_Request $request ) {
 
-    // Change these if your meta key/table differ
-    $limit = 12;
-    $meta_key = 'twispeer_reactions_count'; // if you store aggregated count as postmeta
-    $custom_table = $wpdb->prefix . 'twispeer_reactions'; // if you store each reaction as a row
+    $args = array(
+        'post_type'      => 'post',
+        'post_status'    => 'publish',
+        'posts_per_page' => 100,
+        'orderby'        => 'date',
+        'order'          => 'DESC',
+    );
 
-    // 1) If postmeta aggregated counts exist, prefer that (fast)
-    $has_meta = $wpdb->get_var( $wpdb->prepare(
-      "SELECT COUNT(pm.meta_id) FROM {$wpdb->postmeta} pm WHERE pm.meta_key = %s LIMIT 1",
-      $meta_key
-    ) );
+    $q = new WP_Query( $args );
+    $trending = array();
 
-    if ( $has_meta ) {
-      // Select posts with highest meta value
-      $rows = $wpdb->get_results( $wpdb->prepare(
-        "SELECT p.ID as post_id, CAST(pm.meta_value AS UNSIGNED) as score
-         FROM {$wpdb->posts} p
-         INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID AND pm.meta_key = %s
-         WHERE p.post_status = 'publish' AND p.post_type = 'post'
-         ORDER BY score DESC
-         LIMIT %d",
-         $meta_key, $limit
-      ), ARRAY_A );
+    if ( $q->have_posts() ) {
+        while ( $q->have_posts() ) {
+            $q->the_post();
+            $post_id = get_the_ID();
 
-      $out = array();
-      if ( $rows ) {
-        foreach ( $rows as $r ) {
-          $out[] = array(
-            'id'    => intval( $r['post_id'] ),
-            'score' => intval( $r['score'] ),
-          );
+            // Load reaction meta
+            $meta = twispeer_load_reaction_meta( $post_id );
+            $reactions = $meta['reactions'];
+
+            // total reaction count
+            $total = 0;
+            foreach ( $reactions as $cnt ) {
+                $total += intval( $cnt );
+            }
+
+            // skip posts with no reactions
+            if ( $total <= 0 ) continue;
+
+            $trending[] = array(
+                'id'      => $post_id,
+                'title'   => get_the_title(),
+                'content' => apply_filters(
+                    'the_excerpt',
+                    get_the_excerpt() ?: wp_trim_words( get_the_content(), 30 )
+                ),
+                'author'  => get_the_author_meta(
+                    'display_name',
+                    get_post_field( 'post_author', $post_id )
+                ),
+                'date'     => get_the_date( 'c' ),
+                'link'     => get_permalink(),
+                'reactions_total' => $total,          // ← important for sorting
+                'reactions'       => $reactions,      // for front-end display
+            );
         }
-      }
-
-      return rest_ensure_response( $out );
+        wp_reset_postdata();
     }
 
-    // 2) If a custom reactions table exists, aggregate counts per post
-    $table_exists = $wpdb->get_var( $wpdb->prepare(
-      "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = %s",
-      $custom_table
-    ) );
-
-    if ( $table_exists ) {
-      // Adjust column names below if your table uses different names (post_id, reaction_type, user_id)
-      $rows = $wpdb->get_results( $wpdb->prepare(
-        "SELECT r.post_id AS post_id, COUNT(*) AS score
-         FROM {$custom_table} r
-         INNER JOIN {$wpdb->posts} p ON p.ID = r.post_id AND p.post_status = 'publish' AND p.post_type = 'post'
-         GROUP BY r.post_id
-         ORDER BY score DESC
-         LIMIT %d",
-         $limit
-      ), ARRAY_A );
-
-      $out = array();
-      if ( $rows ) {
-        foreach ( $rows as $r ) {
-          $out[] = array(
-            'id'    => intval( $r['post_id'] ),
-            'score' => intval( $r['score'] ),
-          );
+    // Sort trending:
+    // 1) total reactions DESC
+    // 2) post date DESC if total reactions match
+    usort( $trending, function( $a, $b ) {
+        if ( $b['reactions_total'] == $a['reactions_total'] ) {
+            return strtotime( $b['date'] ) - strtotime( $a['date'] );
         }
-      }
+        return $b['reactions_total'] - $a['reactions_total'];
+    });
 
-      return rest_ensure_response( $out );
-    }
-
-    // 3) Fallback: no meta or custom table detected — return most recent posts (score = 0)
-    $rows = $wpdb->get_results( $wpdb->prepare(
-      "SELECT p.ID as post_id
-       FROM {$wpdb->posts} p
-       WHERE p.post_status = 'publish' AND p.post_type = 'post'
-       ORDER BY p.post_date DESC
-       LIMIT %d",
-       $limit
-    ), ARRAY_A );
-
-    $out = array();
-    if ( $rows ) {
-      foreach ( $rows as $r ) {
-        $out[] = array(
-          'id'    => intval( $r['post_id'] ),
-          'score' => 0,
-        );
-      }
-    }
-
-    return rest_ensure_response( $out );
-  }
+    return rest_ensure_response( $trending );
 }
-// --- end TWISPEER trends by reactions ---
 
 
-
-
-
-
-
-
-
-// --- TWISPEER: trends by reactions (top-N ordered by reactions desc, ties by most recent) ---
-add_action( 'rest_api_init', function () {
-  register_rest_route( 'twispeer/v1', '/trends', array(
-    'methods'  => WP_REST_Server::READABLE,
-    'callback' => 'twispeer_rest_get_trends_by_reactions_topn',
-    'permission_callback' => '__return_true',
-  ) );
-} );
-
-/**
- * Return top-N trending posts ordered by total reactions (desc) then post_date (desc).
- *
- * Response: [ { id: <post_id>, score: <int>, date: "YYYY-mm-dd hh:mm:ss" }, ... ]
- */
-if ( ! function_exists( 'twispeer_rest_get_trends_by_reactions_topn' ) ) {
-  function twispeer_rest_get_trends_by_reactions_topn( WP_REST_Request $request ) {
-    global $wpdb;
-
-    // parameters (change as needed)
-    $limit = 12; // number of trending posts to return
-    $meta_key = 'twispeer_reactions_count'; // aggregated count per post (optional)
-    $custom_table = $wpdb->prefix . 'twispeer_reactions'; // custom reactions table (optional)
-
-    // Helper to format date string from MySQL row
-    $format_row = function( $post_id, $score, $post_date ) {
-      return array(
-        'id'    => intval( $post_id ),
-        'score' => intval( $score ),
-        'date'  => $post_date,
-      );
-    };
-
-    // 1) Prefer aggregated postmeta if present (fast)
-    $has_meta = $wpdb->get_var( $wpdb->prepare(
-      "SELECT COUNT(pm.meta_id) FROM {$wpdb->postmeta} pm WHERE pm.meta_key = %s LIMIT 1",
-      $meta_key
-    ) );
-
-    if ( $has_meta ) {
-      $rows = $wpdb->get_results( $wpdb->prepare(
-        "SELECT p.ID as post_id, CAST(pm.meta_value AS UNSIGNED) as score, p.post_date
-         FROM {$wpdb->posts} p
-         INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID AND pm.meta_key = %s
-         WHERE p.post_status = 'publish' AND p.post_type = 'post'
-         ORDER BY score DESC, p.post_date DESC
-         LIMIT %d",
-         $meta_key, $limit
-      ), ARRAY_A );
-
-      $out = array();
-      if ( $rows ) {
-        foreach ( $rows as $r ) {
-          $out[] = $format_row( $r['post_id'], $r['score'], $r['post_date'] );
-        }
-      }
-      return rest_ensure_response( $out );
-    }
-
-    // 2) If custom reactions table exists, aggregate counts per post
-    $table_exists = $wpdb->get_var( $wpdb->prepare(
-      "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = %s",
-      $custom_table
-    ) );
-
-    if ( $table_exists ) {
-      // adjust column names if your table differs (assumes r.post_id exists)
-      $rows = $wpdb->get_results( $wpdb->prepare(
-        "SELECT r.post_id AS post_id, COUNT(*) AS score, p.post_date AS post_date
-         FROM {$custom_table} r
-         INNER JOIN {$wpdb->posts} p ON p.ID = r.post_id AND p.post_status = 'publish' AND p.post_type = 'post'
-         GROUP BY r.post_id
-         ORDER BY score DESC, p.post_date DESC
-         LIMIT %d",
-         $limit
-      ), ARRAY_A );
-
-      $out = array();
-      if ( $rows ) {
-        foreach ( $rows as $r ) {
-          $out[] = $format_row( $r['post_id'], $r['score'], $r['post_date'] );
-        }
-      }
-      return rest_ensure_response( $out );
-    }
-
-    // 3) Fallback: no meta or custom table: return most recent posts but treat score=0
-    $rows = $wpdb->get_results( $wpdb->prepare(
-      "SELECT p.ID as post_id, 0 as score, p.post_date
-       FROM {$wpdb->posts} p
-       WHERE p.post_status = 'publish' AND p.post_type = 'post'
-       ORDER BY p.post_date DESC
-       LIMIT %d",
-       $limit
-    ), ARRAY_A );
-
-    $out = array();
-    if ( $rows ) {
-      foreach ( $rows as $r ) {
-        $out[] = $format_row( $r['post_id'], $r['score'], $r['post_date'] );
-      }
-    }
-
-    return rest_ensure_response( $out );
-  }
-}
-// --- end TWISPEER trends top-N ---
+/*--------------------------------------------------------------
+    END OF FILE
+--------------------------------------------------------------*/
