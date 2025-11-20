@@ -44,6 +44,7 @@ add_action( 'after_setup_theme', 'twispeer_setup' );
 
 /* Enqueue assets (automatically loads all component CSS/JS) */
 function twispeer_enqueue_assets() {
+    
     $ver = defined('TWISPEER_VERSION') ? TWISPEER_VERSION : '1.0.2';
 
     // root and main
@@ -151,3 +152,29 @@ function twispeer_handle_create_sample_post() {
     exit;
 }
 add_action( 'admin_post_twispeer_create_sample_post', 'twispeer_handle_create_sample_post' );
+
+
+
+// --- TWISPEER: enqueue trending assets (safe helper) ---
+
+add_action('wp_enqueue_scripts', function() {
+  wp_enqueue_script(
+    'twispeer-trending',
+    get_template_directory_uri() . '/assets/js/components/trending.js',
+    array(),
+    filemtime( get_template_directory() . '/assets/js/components/trending.js' ),
+    true
+  );
+
+  wp_localize_script(
+    'twispeer-trending',
+    'TWISPEER_REST',
+    array(
+      'trends_route' => esc_url_raw( rest_url( 'twispeer/v1/trends' ) ),
+    )
+  );
+});
+
+
+// --- end enqueue trending assets ---
+

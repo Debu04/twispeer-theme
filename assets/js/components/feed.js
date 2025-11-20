@@ -190,6 +190,10 @@
       notice.textContent = `${totalCount} reacted`;
       notice.style.display = totalCount > 0 ? 'inline' : 'none';
     }
+
+    // mark rendered so we don't re-fetch for the same DOM
+    const _reactionsEl = feedItem.querySelector('.tp-reactions');
+    if (_reactionsEl) _reactionsEl.setAttribute('data-rendered', 'true');
   }
 
   /* ---------- Set reaction (POST) ---------- */
@@ -424,10 +428,292 @@
     setTimeout(()=> { notice.style.display = 'none'; }, 1600);
   }
 
+  /**
+   * Re-initialize per-post interactions after an external render.
+   * This will:
+   *  - call fetchAndRenderReactions for each .tp-feed-item so reaction counts show up
+   *  - (delegated click handlers for menus/share/report are already global and will work)
+   */
+  function initFeedInteractions() {
+    document.querySelectorAll('.tp-feed-item').forEach(item => {
+      // If reactions container hasn't been rendered, fetch & render
+      const reactionsEl = item.querySelector('.tp-reactions');
+      if (reactionsEl) {
+        // prevent duplicate calls: only fetch when data-rendered is not true
+        if (reactionsEl.getAttribute('data-rendered') !== 'true') {
+          // call the same function used during initial render
+          fetchAndRenderReactions(item);
+        }
+      } else {
+        // If markup is different, attempt to find post id and create reactions container + fetch
+        const postId = item.dataset && item.dataset.postId;
+        if (postId) {
+          // safe fallback: call fetchAndRenderReactions if present
+          try { fetchAndRenderReactions(item); } catch(e) { /* ignore */ }
+        }
+      }
+    });
+  }
+
+  // expose for other modules (TWISPEER_FEED.renderPostsIntoFeed will call this)
+  window.initFeedInteractions = initFeedInteractions;
+
   // initialize
   fetchFeed();
 
   // expose refresh
   window.TWISPEER_feedRefresh = fetchFeed;
 
+})();
+
+
+
+// === TWISPEER_FEED public API (append only) ===
+(function () {
+  // Ensure we don't overwrite if already set
+  window.TWISPEER_FEED = window.TWISPEER_FEED || {};
+
+  // === Twispeer: escape helpers (added to fix Trending section error) ===
+function escapeHtml(s) {
+  if (typeof window.escapeHtml === 'function') return window.escapeHtml(s);
+  if (!s) return '';
+  return ('' + s).replace(/[&<>"']/g, m => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[m]));
+}
+
+function escapeAttr(s) {
+  if (typeof window.escapeAttr === 'function') return window.escapeAttr(s);
+  return (s || '').replace(/"/g, '&quot;');
+}
+// === End of patch ===
+
+
+  // internal cache for posts we've already fetched/rendered
+  const cache = {
+    postsById: {},   // id -> post object
+    lastList: []     // last array of posts shown in feed
+  };
+
+  // --- replace renderPostHTML with this (keeps same markup as renderPosts) ---
+  function renderPostHTML(post) {
+    const id = post.id || '';
+    const author = escapeHtml(post.author || 'Unknown');
+    const dateShort = ''; // TWISPEER_FEED render doesn't currently know the exact date; feed.loadFeed provides full objects if needed
+    const content = post.content || '';
+
+    // Use the same structure as renderPosts() produced earlier so event delegation & reaction hooks work
+    return `<div class="tp-feed-item" data-post-id="${id}" data-post-link="${escapeAttr(post.link || '')}">
+              <div class="tp-feed-item-header">
+                <div class="tp-profile">
+                  <div class="tp-avatar-sm" aria-hidden="true">${escapeHtml((author||'U').charAt(0).toUpperCase())}</div>
+                  <div class="tp-profile-meta">
+                    <div class="tp-profile-name">${author}</div>
+                    <div class="tp-profile-time">${dateShort}</div>
+                  </div>
+                </div>
+
+                <div style="position:relative;">
+                  <button class="tp-menu-button" aria-expanded="false" aria-label="Open post menu">⋯</button>
+                  <div class="tp-menu-panel" role="menu" aria-hidden="true">
+                    <button class="tp-menu-item tp-report-btn" data-action="report" type="button">Report</button>
+                    <button class="tp-menu-item tp-remove-btn" data-action="remove" type="button">Remove</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="content">${content}</div>
+
+              <div class="tp-reactions-row">
+                <div class="tp-reactions" data-rendered="false">
+                  <div class="tp-empty-inline">Loading reactions…</div>
+                </div>
+
+                <div class="tp-actions">
+                  <button class="tp-action-btn tp-share-btn" type="button" aria-label="Share">
+                    🔗 <span>Share</span>
+                  </button>
+                  <span class="tp-action-notice" style="display:none;"></span>
+                </div>
+              </div>
+            </div>`;
+  }
+
+
+  function escapeHtml(s) {
+    if (!s) return '';
+    return ('' + s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // Render a list of post objects into #feed-items, preserving your existing event hooks
+  function renderPostsIntoFeed(posts) {
+    const feed = document.getElementById('feed-items');
+    if (!feed) return;
+    // Save last list
+    cache.lastList = posts.slice();
+
+    // Build HTML using the project's renderer if available (hook for you)
+    if (window.TWISPEER_RENDER && typeof window.TWISPEER_RENDER.post === 'function') {
+      feed.innerHTML = posts.map(p => window.TWISPEER_RENDER.post(p)).join('');
+    } else {
+      feed.innerHTML = posts.map(renderPostHTML).join('');
+    }
+
+    // Re-attach interaction handlers (reactions etc.) if your main feed script exposes them.
+    // If you already have a function like initFeedInteractions(), call it here.
+    if (typeof window.initFeedInteractions === 'function') {
+      window.initFeedInteractions();
+    }
+  }
+
+  // Fetch a single post by WP REST ID (wp/v2/posts) — fallback safe method
+  async function fetchPostById(id) {
+    if (cache.postsById[id]) return cache.postsById[id];
+
+    try {
+      const url = (window.TWISPEER_REST && TWISPEER_REST.root)
+        ? TWISPEER_REST.root + 'wp/v2/posts/' + id + '?_embed'
+        : window.location.origin + '/wp-json/wp/v2/posts/' + id + '?_embed';
+
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('Post fetch failed');
+      const post = await res.json();
+
+      // Get author name from _embedded if available
+      let authorName = '';
+      if (post._embedded && post._embedded.author && post._embedded.author[0] && post._embedded.author[0].name) {
+        authorName = post._embedded.author[0].name;
+      } else if (post.author && typeof post.author === 'string') {
+        authorName = post.author;
+      } else {
+        authorName = '';
+      }
+
+      // Normalize to minimal shape used by renderer (include link & author name)
+      const normalized = {
+        id: post.id,
+        title: post.title && (post.title.rendered || post.title) || '',
+        content: post.content && (post.content.rendered || post.content) || '',
+        author: authorName || '',
+        link: post.link || '',
+        likes: post.meta && post.meta._likes ? post.meta._likes : 0,
+        comments: post.comment_count || 0
+      };
+
+      cache.postsById[id] = normalized;
+      return normalized;
+    } catch (err) {
+      console.warn('fetchPostById error', err);
+      return null;
+    }
+  }
+
+  // Bulk fetch posts by an array of IDs (tries cache first)
+  async function fetchPostsByIds(ids = []) {
+    const results = [];
+    for (const id of ids) {
+      const cached = cache.postsById[id];
+      if (cached) {
+        results.push(cached);
+      } else {
+        // fetch each (could be optimized to batch; keep simple and reliable)
+        const p = await fetchPostById(id);
+        if (p) results.push(p);
+      }
+    }
+    return results;
+  }
+
+  // Public: load feed normally (calls your existing feed loader if present)
+    // Public: load feed normally (calls your existing feed loader if present)
+  async function loadFeed() {
+    // Prefer your existing feed loader (we expose it as TWISPEER_feedRefresh)
+    if (typeof window.loadMainFeed === 'function') {
+      return window.loadMainFeed();
+    }
+    if (typeof window.TWISPEER_feedRefresh === 'function') {
+      return window.TWISPEER_feedRefresh();
+    }
+
+    // Fallback: if cache has lastList, render it, else try to fetch /wp/v2/posts (simple)
+    if (cache.lastList && cache.lastList.length) {
+      renderPostsIntoFeed(cache.lastList);
+      return;
+    }
+
+    try {
+      const url = (window.TWISPEER_REST && TWISPEER_REST.root)
+        ? TWISPEER_REST.root + 'wp/v2/posts?per_page=10'
+        : window.location.origin + '/wp-json/wp/v2/posts?per_page=10';
+
+      const res = await fetch(url, { credentials: 'same-origin' });
+      const arr = await res.json();
+      const normalized = arr.map(p => ({
+        id: p.id,
+        title: p.title && (p.title.rendered || p.title) || '',
+        content: p.content && (p.content.rendered || p.content) || '',
+        author: p.author || '',
+        likes: p.meta && p.meta._likes ? p.meta._likes : 0,
+        comments: p.comment_count || 0
+      }));
+
+      // cache them
+      normalized.forEach(p => cache.postsById[p.id] = p);
+      renderPostsIntoFeed(normalized);
+    } catch (err) {
+      console.error('TWISPEER_FEED.loadFeed error', err);
+      // if everything fails, show a friendly message but don't break the whole UI
+      const feed = document.getElementById('feed-items');
+      if (feed) feed.innerHTML = '<div class="tp-empty">Unable to load feed</div>';
+    }
+  }
+
+
+  // Public: load trending posts given an array of post IDs OR fallback to provided trend objects that already contain full data
+  async function loadTrendingFromTrendResponse(trendResp = []) {
+    // trendResp can be array of {id: number} OR full post-like objects
+    if (!Array.isArray(trendResp)) return;
+
+    // If trendResp looks like full posts (has title & content), just render
+    const needIds = [];
+    const fullPosts = [];
+    for (const t of trendResp) {
+      if (t.id && (t.title || t.content)) fullPosts.push({
+        id: t.id, title: t.title || '', content: t.content || '', author: t.author || '', likes: t.likes || 0, comments: t.comments || 0
+      });
+      else if (t.id) needIds.push(t.id);
+    }
+
+    let posts = fullPosts.slice();
+    if (needIds.length) {
+      const fetched = await fetchPostsByIds(needIds);
+      posts = posts.concat(fetched.filter(Boolean));
+    }
+
+    // cache
+    posts.forEach(p => cache.postsById[p.id] = p);
+    renderPostsIntoFeed(posts);
+  }
+
+  // Export API
+  window.TWISPEER_FEED.fetchPostById = fetchPostById;
+  window.TWISPEER_FEED.fetchPostsByIds = fetchPostsByIds;
+  window.TWISPEER_FEED.renderPostsIntoFeed = renderPostsIntoFeed;
+  window.TWISPEER_FEED.loadFeed = loadFeed;
+  window.TWISPEER_FEED.loadTrendingFromTrendResponse = loadTrendingFromTrendResponse;
+  window.TWISPEER_FEED._cache = cache;
+
+  // Optionally auto-load feed on initial page load if your theme doesn't already
+  if (!document.querySelector('#feed-items').children.length) {
+    document.addEventListener('DOMContentLoaded', () => {
+      // small delay so other code initializes
+      setTimeout(() => {
+        if (typeof window.TWISPEER_FEED.loadFeed === 'function') window.TWISPEER_FEED.loadFeed();
+      }, 40);
+    });
+  }
 })();
